@@ -1,0 +1,13 @@
+# Core dependencies — run on the Pi.
+requests>=2.31
+Pillow>=10.0
+
+# Waveshare driver. On a Pi, install per their wiki (clones the e-Paper repo
+# and installs RPi.GPIO + spidev). The pip package below is a community
+# mirror that works on Raspberry Pi OS:
+#   sudo apt install python3-pip python3-pil python3-numpy
+#   sudo pip3 install RPi.GPIO spidev
+# The waveshare_epd module is then made available by cloning:
+#   https://github.com/waveshare/e-Paper
+# and pointing PYTHONPATH at e-Paper/RaspberryPi_JetsonNano/python/lib
+# (install.sh handles this).

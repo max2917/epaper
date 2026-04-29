@@ -1,0 +1,49 @@
+# Copy to /etc/epaper-reddit/config.toml (or pass --config).
+# Every key has a sensible default, so you only need to override what you care about.
+
+[reddit]
+# Subreddit to pull from. Override with --subreddit on the command line.
+# We hit reddit.com/r/<subreddit>.json — the same listing you'd see in a
+# browser at reddit.com/r/<subreddit> (currently "hot") — and take the first
+# post that's a direct image.
+subreddit = "earthporn"
+
+# How many posts to walk through looking for a usable image before giving up.
+max_candidates = 25
+
+# User-Agent sent to reddit.com. Reddit asks for a descriptive UA including
+# a contact handle; replace this with your own.
+user_agent = "epaper-reddit/1.0 (by /u/yourname)"
+
+[image]
+# Display geometry — don't change unless you have a different panel.
+width = 800
+height = 480
+
+# "crop" (fill, may crop edges) or "fit" (letterbox) or "stretch".
+fit = "crop"
+
+# Floyd-Steinberg dithering. Off looks posterized; on looks much better.
+dither = true
+
+# If true, the BMP written to `output_bmp` is also kept after the run, useful
+# for debugging the conversion. If false, it's still written but as a temp file.
+keep_bmp = true
+output_bmp = "/var/lib/epaper-reddit/current.bmp"
+
+# Directory used to remember which post we last showed. Prevents re-displaying
+# the same image and lets the script skip to the next post if the top hasn't
+# changed. Set to "" to disable.
+state_dir = "/var/lib/epaper-reddit"
+
+[display]
+# Panel module name from the waveshare_epd package.
+# For the 7.3" 7-color (B0BMQ83W7W) this is epd7in3f.
+driver = "epd7in3f"
+
+# Set true while developing on a non-Pi machine — skips actual SPI calls.
+dry_run = false
+
+[log]
+# DEBUG | INFO | WARNING | ERROR
+level = "INFO"

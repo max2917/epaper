@@ -1,0 +1,28 @@
+[Unit]
+Description=Update Waveshare e-paper with top Reddit image
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+# The Waveshare driver needs to talk to /dev/spidev0.0 and the GPIO chip; on
+# stock Raspberry Pi OS this means running as root. If you've set up
+# udev/group rules to give a normal user access, swap User= to that.
+User=root
+Group=root
+
+# install.sh installs the project to /opt/epaper-reddit and clones the
+# Waveshare e-Paper repo to /opt/waveshare-epaper. The PYTHONPATH below
+# stitches them together.
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/opt/epaper-reddit:/opt/waveshare-epaper/RaspberryPi_JetsonNano/python/lib
+
+ExecStart=/usr/bin/python3 -m epaper_reddit --config /etc/epaper-reddit/config.toml
+
+# Don't hammer the panel if something goes wrong — fail loudly, retry on the
+# next timer tick instead of an immediate loop.
+Restart=no
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target
