@@ -70,7 +70,7 @@ journalctl -u epaper-reddit -b
    repo to `/opt/waveshare-epaper`
 4. copy this project to `/opt/epaper-reddit`
 5. drop a config at `/etc/epaper-reddit/config.toml`
-6. enable the systemd timer (defaults to hourly)
+6. enable the systemd timer (defaults to every 1 hour)
 
 ## Configuration
 
@@ -94,8 +94,8 @@ Override any field on the command line with `--subreddit`, `--driver`,
 Edit `OnUnitActiveSec=` in `systemd/epaper-reddit.timer` (or
 `/etc/systemd/system/epaper-reddit.timer` after install). E-paper has a
 limited update count over its lifetime — Waveshare's 7-color panels are
-rated for tens of thousands of refreshes, so hourly is fine, but going
-sub-minute is a bad idea.
+rated for tens of thousands of refreshes, so every 1 hour is well within
+spec, but going sub-minute is a bad idea.
 
 ## Testing on a non-Pi machine
 

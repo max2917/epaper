@@ -1,13 +1,13 @@
 [Unit]
-Description=Refresh Waveshare e-paper hourly with top Reddit image
+Description=Refresh Waveshare e-paper every 1 hour with top Reddit image
 
 [Timer]
-# Run 2 minutes after boot, then every hour. Persistent=true means if the Pi
+# Run 1 minutes after boot, then every 1 hour. Persistent=true means if the Pi
 # was off, it'll fire once on the next boot. RandomizedDelaySec spreads load if
 # you ever run this on multiple Pis (and prevents Reddit rate-limit clustering).
-OnBootSec=2min
+OnBootSec=1min
 OnUnitActiveSec=1h
-RandomizedDelaySec=2min
+RandomizedDelaySec=1min
 Persistent=true
 Unit=epaper-reddit.service
 
