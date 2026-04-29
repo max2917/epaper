@@ -113,75 +113,81 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
 
     # Reddit -> local image file ------------------------------------------------
-    if args.from_file:
-        local_image = Path(args.from_file)
-        if not local_image.exists():
-            log.error("--from-file points at a missing path: %s", local_image)
-            return 2
-        log.info("Using local file %s (skipping Reddit)", local_image)
-        post_id: Optional[str] = None
-    else:
-        state_dir, last_post_file = _state_paths(cfg.image.state_dir)
-        skip_ids = _load_skip_ids(last_post_file)
+    tmp_download: Optional[Path] = None
+    try:
+        if args.from_file:
+            local_image = Path(args.from_file)
+            if not local_image.exists():
+                log.error("--from-file points at a missing path: %s", local_image)
+                return 2
+            log.info("Using local file %s (skipping Reddit)", local_image)
+            post_id: Optional[str] = None
+        else:
+            state_dir, last_post_file = _state_paths(cfg.image.state_dir)
+            skip_ids = _load_skip_ids(last_post_file)
+            try:
+                post = fetch_top_image(
+                    subreddit=cfg.reddit.subreddit,
+                    max_candidates=cfg.reddit.max_candidates,
+                    user_agent=cfg.reddit.user_agent,
+                    skip_post_ids=skip_ids,
+                )
+            except RedditError as e:
+                log.error("Reddit fetch failed: %s", e)
+                return 3
+
+            # Download to a temp file. We don't keep the original around — only the
+            # final BMP. If you want the source, look at post.url in the logs.
+            tmp_download = Path(tempfile.gettempdir()) / f"epaper_reddit_{post.id}"
+            try:
+                download_image(post.url, cfg.reddit.user_agent, str(tmp_download))
+            except Exception as e:  # noqa: BLE001
+                log.error("Download failed: %s", e)
+                return 4
+            local_image = tmp_download
+            post_id = post.id
+
+        # Image processing ------------------------------------------------------
         try:
-            post = fetch_top_image(
-                subreddit=cfg.reddit.subreddit,
-                max_candidates=cfg.reddit.max_candidates,
-                user_agent=cfg.reddit.user_agent,
-                skip_post_ids=skip_ids,
+            prepared = prepare_image(
+                local_image,
+                width=cfg.image.width,
+                height=cfg.image.height,
+                fit=cfg.image.fit,
+                dither=cfg.image.dither,
             )
-        except RedditError as e:
-            log.error("Reddit fetch failed: %s", e)
-            return 3
-
-        # Download to a temp file. We don't keep the original around — only the
-        # final BMP. If you want the source, look at post.url in the logs.
-        tmp = Path(tempfile.gettempdir()) / f"epaper_reddit_{post.id}"
-        try:
-            download_image(post.url, cfg.reddit.user_agent, str(tmp))
         except Exception as e:  # noqa: BLE001
-            log.error("Download failed: %s", e)
-            return 4
-        local_image = tmp
-        post_id = post.id
+            log.exception("Image processing failed: %s", e)
+            return 5
 
-    # Image processing ----------------------------------------------------------
-    try:
-        prepared = prepare_image(
-            local_image,
-            width=cfg.image.width,
-            height=cfg.image.height,
-            fit=cfg.image.fit,
-            dither=cfg.image.dither,
-        )
-    except Exception as e:  # noqa: BLE001
-        log.exception("Image processing failed: %s", e)
-        return 5
+        bmp_path = cfg.image.output_bmp
+        if not cfg.image.keep_bmp:
+            # Still write one — the display driver wants a Pillow image, but writing
+            # the BMP is cheap and useful for debugging. We just put it in /tmp.
+            bmp_path = str(Path(tempfile.gettempdir()) / "epaper_reddit_current.bmp")
+        save_bmp(prepared, bmp_path)
+        log.info("BMP saved to %s", bmp_path)
 
-    bmp_path = cfg.image.output_bmp
-    if not cfg.image.keep_bmp:
-        # Still write one — the display driver wants a Pillow image, but writing
-        # the BMP is cheap and useful for debugging. We just put it in /tmp.
-        bmp_path = str(Path(tempfile.gettempdir()) / "epaper_reddit_current.bmp")
-    save_bmp(prepared, bmp_path)
-    log.info("BMP saved to %s", bmp_path)
+        # Display ---------------------------------------------------------------
+        # Import display lazily so dry-run works without RPi.GPIO installed.
+        from .display import DisplayError, push_to_display
+        try:
+            push_to_display(prepared, driver_name=cfg.display.driver, dry_run=cfg.display.dry_run)
+        except DisplayError as e:
+            log.error("Display failed: %s", e)
+            return 6
 
-    # Display -------------------------------------------------------------------
-    # Import display lazily so dry-run works without RPi.GPIO installed.
-    from .display import DisplayError, push_to_display
-    try:
-        push_to_display(prepared, driver_name=cfg.display.driver, dry_run=cfg.display.dry_run)
-    except DisplayError as e:
-        log.error("Display failed: %s", e)
-        return 6
+        # Record what we showed so the next run can skip it (if Reddit is the source).
+        if post_id and not args.from_file:
+            _, last_post_file = _state_paths(cfg.image.state_dir)
+            _record_shown(last_post_file, post_id, str(post.url))
 
-    # Record what we showed so the next run can skip it (if Reddit is the source).
-    if post_id and not args.from_file:
-        _, last_post_file = _state_paths(cfg.image.state_dir)
-        _record_shown(last_post_file, post_id, str(local_image))
-
-    log.info("Done.")
-    return 0
+        log.info("Done.")
+        return 0
+    finally:
+        if tmp_download is not None:
+            tmp_download.unlink(missing_ok=True)
+            log.debug("Removed temp download %s", tmp_download)
 
 
 if __name__ == "__main__":
