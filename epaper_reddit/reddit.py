@@ -51,8 +51,25 @@ def _candidate_url(post_data: dict) -> Optional[str]:
         return None
     if post_data.get("is_video"):
         return None
+
+    url_check = post_data.get("url_overridden_by_dest") or post_data.get("url") or ""
+    if re.search(r"\.gif(\?|$)", url_check, re.IGNORECASE):
+        return None
     if post_data.get("is_gallery"):
-        # Per the user's preference we skip galleries entirely.
+        # Extract the first image from the gallery via media_metadata, which
+        # Reddit provides in display order via gallery_data.items.
+        items = (post_data.get("gallery_data") or {}).get("items") or []
+        metadata = post_data.get("media_metadata") or {}
+        for item in items:
+            mid = item.get("media_id")
+            if not mid:
+                continue
+            entry = metadata.get(mid) or {}
+            if entry.get("status") != "valid" or entry.get("e") != "Image":
+                continue
+            src = (entry.get("s") or {}).get("u")
+            if src:
+                return src.replace("&amp;", "&")
         return None
     if post_data.get("removed_by_category") or post_data.get("removed"):
         return None
