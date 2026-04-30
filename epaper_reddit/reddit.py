@@ -51,6 +51,8 @@ def _candidate_url(post_data: dict) -> Optional[str]:
         return None
     if post_data.get("is_video"):
         return None
+    if post_data.get("promoted"):
+        return None
 
     url_check = post_data.get("url_overridden_by_dest") or post_data.get("url") or ""
     if re.search(r"\.gif(\?|$)", url_check, re.IGNORECASE):
