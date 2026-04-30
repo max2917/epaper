@@ -33,6 +33,7 @@ install -m 0644 "$PROJECT_SRC/systemd/epaper-reddit.timer"   /etc/systemd/system
 systemctl daemon-reload
 
 echo
-echo "Update complete. To run now:"
-echo "  sudo systemctl start epaper-reddit.service"
+echo "Update complete. Starting service..."
+systemctl start epaper-reddit.service
+echo "Done. To follow logs:"
 echo "  journalctl -u epaper-reddit.service -f"
