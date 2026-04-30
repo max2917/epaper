@@ -86,15 +86,6 @@ def _candidate_url(post_data: dict) -> Optional[str]:
             return url + ".jpg"
         return url
 
-    # Fall back to Reddit's own preview if it has one. The preview URL is
-    # HTML-escaped (&amp;) — un-escape for requests.
-    preview = post_data.get("preview", {})
-    images = preview.get("images") or []
-    if images:
-        src = images[0].get("source", {}).get("url")
-        if src:
-            return src.replace("&amp;", "&")
-
     return None
 
 
