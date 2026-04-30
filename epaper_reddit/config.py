@@ -40,6 +40,8 @@ class ImageConfig:
     keep_bmp: bool = True
     output_bmp: str = "/var/lib/epaper-reddit/current.bmp"
     state_dir: str = "/var/lib/epaper-reddit"
+    # How many recently-shown image URLs to remember and avoid re-displaying.
+    recent_history_size: int = 5
 
 
 @dataclass

@@ -74,31 +74,37 @@ def _setup_logging(level_name: str) -> None:
 
 
 def _state_paths(state_dir: str) -> tuple[Optional[Path], Optional[Path]]:
-    """Returns (state_dir_path, last_post_file) or (None, None) if disabled."""
+    """Returns (state_dir_path, history_file) or (None, None) if disabled."""
     if not state_dir:
         return None, None
     d = Path(state_dir)
-    return d, d / "last_post.json"
+    return d, d / "recent_history.json"
 
 
-def _load_skip_ids(last_post_file: Optional[Path]) -> set[str]:
-    """Read the last-shown post id so we can skip it on the next run."""
-    if not last_post_file or not last_post_file.exists():
-        return set()
+def _load_recent_ids(history_file: Optional[Path]) -> list[str]:
+    """Read the rolling list of recently-shown post IDs (most recent first)."""
+    if not history_file or not history_file.exists():
+        return []
     try:
-        data = json.loads(last_post_file.read_text())
-        pid = data.get("id")
-        return {pid} if pid else set()
+        data = json.loads(history_file.read_text())
+        ids = data.get("recent_ids")
+        if isinstance(ids, list):
+            return [i for i in ids if isinstance(i, str)]
+        return []
     except Exception:  # noqa: BLE001 — corrupt state file shouldn't crash the run
-        log.warning("Could not read %s; ignoring", last_post_file)
-        return set()
+        log.warning("Could not read %s; ignoring", history_file)
+        return []
 
 
-def _record_shown(last_post_file: Optional[Path], post_id: str, url: str) -> None:
-    if not last_post_file:
+def _record_shown(history_file: Optional[Path], post_id: str, history_size: int) -> None:
+    """Prepend `post_id` to the rolling history and trim to `history_size` entries."""
+    if not history_file or history_size < 1:
         return
-    last_post_file.parent.mkdir(parents=True, exist_ok=True)
-    last_post_file.write_text(json.dumps({"id": post_id, "url": url}))
+    existing = _load_recent_ids(history_file)
+    updated = [post_id] + [i for i in existing if i != post_id]
+    updated = updated[:history_size]
+    history_file.parent.mkdir(parents=True, exist_ok=True)
+    history_file.write_text(json.dumps({"recent_ids": updated}))
 
 
 def main(argv: Optional[list[str]] = None) -> int:
@@ -123,18 +129,18 @@ def main(argv: Optional[list[str]] = None) -> int:
             log.info("Using local file %s (skipping Reddit)", local_image)
             post_id: Optional[str] = None
         else:
-            state_dir, last_post_file = _state_paths(cfg.image.state_dir)
-            skip_ids = _load_skip_ids(last_post_file)
+            state_dir, history_file = _state_paths(cfg.image.state_dir)
+            recent_ids = set(_load_recent_ids(history_file))
             try:
                 post = fetch_top_image(
                     subreddit=cfg.reddit.subreddit,
                     max_candidates=cfg.reddit.max_candidates,
                     user_agent=cfg.reddit.user_agent,
-                    skip_post_ids=skip_ids,
+                    skip_post_ids=recent_ids,
                 )
             except RedditError as e:
-                log.error("Reddit fetch failed: %s", e)
-                return 3
+                log.warning("No new image to display, skipping refresh: %s", e)
+                return 0
 
             # Download to a temp file. We don't keep the original around — only the
             # final BMP. If you want the source, look at post.url in the logs.
@@ -179,8 +185,8 @@ def main(argv: Optional[list[str]] = None) -> int:
 
         # Record what we showed so the next run can skip it (if Reddit is the source).
         if post_id and not args.from_file:
-            _, last_post_file = _state_paths(cfg.image.state_dir)
-            _record_shown(last_post_file, post_id, str(post.url))
+            _, history_file = _state_paths(cfg.image.state_dir)
+            _record_shown(history_file, post_id, cfg.image.recent_history_size)
 
         log.info("Done.")
         return 0

@@ -31,10 +31,15 @@ dither = true
 keep_bmp = true
 output_bmp = "/var/lib/epaper-reddit/current.bmp"
 
-# Directory used to remember which post we last showed. Prevents re-displaying
-# the same image and lets the script skip to the next post if the top hasn't
-# changed. Set to "" to disable.
+# Directory used to remember which posts we recently showed. Prevents
+# re-displaying the same image and lets the script skip to the next post if
+# the top hasn't changed. Set to "" to disable.
 state_dir = "/var/lib/epaper-reddit"
+
+# How many recently-shown post IDs to remember. The script will skip posts
+# whose ID appears in the last N runs. Set to 1 for "just don't repeat the
+# most recent" behavior.
+recent_history_size = 5
 
 [display]
 # Panel module name from the waveshare_epd package.

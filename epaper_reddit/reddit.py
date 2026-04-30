@@ -121,7 +121,7 @@ def fetch_top_image(
     Walks /r/<sub>.json (the same listing you'd see in a browser at
     reddit.com/r/<sub>) and returns the first qualifying image post. Raises
     RedditError if none of the first `max_candidates` posts qualify.
-    `skip_post_ids` lets the caller exclude posts already shown.
+    `skip_post_ids` lets the caller exclude posts already shown recently.
     """
     skip_post_ids = skip_post_ids or set()
     examined = 0
@@ -129,7 +129,7 @@ def fetch_top_image(
         examined += 1
         post_id = data.get("id", "")
         if post_id in skip_post_ids:
-            log.debug("Skipping already-shown post %s", post_id)
+            log.debug("Skipping recently-shown post %s", post_id)
             continue
         url = _candidate_url(data)
         if not url:
