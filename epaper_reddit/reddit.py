@@ -98,11 +98,23 @@ def _iter_posts(subreddit: str, limit: int, user_agent: str) -> Iterator[dict]:
     headers = {"User-Agent": user_agent}
 
     log.debug("GET %s params=%s", url, params)
-    resp = requests.get(url, params=params, headers=headers, timeout=15)
+    try:
+        resp = requests.get(url, params=params, headers=headers, timeout=15)
+    except requests.RequestException as e:
+        # ConnectionError, Timeout, etc. — surface as RedditError so the caller
+        # can treat "couldn't reach Reddit" as a clean skip, not a crash.
+        raise RedditError(f"Network error talking to Reddit: {e}") from e
     if resp.status_code == 429:
         raise RedditError("Reddit rate-limited us (HTTP 429). Set a unique User-Agent.")
-    resp.raise_for_status()
-    payload = resp.json()
+    try:
+        resp.raise_for_status()
+    except requests.HTTPError as e:
+        raise RedditError(f"Reddit returned HTTP {resp.status_code}: {e}") from e
+    try:
+        payload = resp.json()
+    except ValueError as e:
+        # Reddit occasionally serves an HTML error page instead of JSON.
+        raise RedditError(f"Reddit response was not JSON: {e}") from e
     children = payload.get("data", {}).get("children", []) or []
     for child in children:
         data = child.get("data") or {}
