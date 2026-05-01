@@ -19,12 +19,20 @@ the already-quantized image to the display driver.
 from __future__ import annotations
 
 import logging
+import warnings
 from pathlib import Path
 from typing import Tuple
 
 from PIL import Image, ImageOps
 
 log = logging.getLogger(__name__)
+
+# By default Pillow emits DecompressionBombWarning (just a warning, processing
+# continues) for images > MAX_IMAGE_PIXELS, and only raises DecompressionBombError
+# above 2x that. On a Pi Zero W (512MB RAM) even the warning case can OOM-kill
+# the process during decompression — an unrecoverable SIGKILL. Promoting the
+# warning to an exception makes it catchable so the retry loop can move on.
+warnings.simplefilter("error", Image.DecompressionBombWarning)
 
 # Order matters only for human readability; the values are what go into the
 # palette image. We pad to 256 colors with black so PIL accepts it as a P-mode
