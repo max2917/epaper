@@ -128,43 +128,68 @@ def main(argv: Optional[list[str]] = None) -> int:
                 return 2
             log.info("Using local file %s (skipping Reddit)", local_image)
             post_id: Optional[str] = None
+            try:
+                prepared = prepare_image(
+                    local_image,
+                    width=cfg.image.width,
+                    height=cfg.image.height,
+                    fit=cfg.image.fit,
+                    dither=cfg.image.dither,
+                )
+            except Exception as e:  # noqa: BLE001
+                log.exception("Image processing failed: %s", e)
+                return 5
         else:
             state_dir, history_file = _state_paths(cfg.image.state_dir)
             recent_ids = set(_load_recent_ids(history_file))
-            try:
-                post = fetch_top_image(
-                    subreddit=cfg.reddit.subreddit,
-                    max_candidates=cfg.reddit.max_candidates,
-                    user_agent=cfg.reddit.user_agent,
-                    skip_post_ids=recent_ids,
-                )
-            except RedditError as e:
-                log.warning("No new image to display, skipping refresh: %s", e)
+            # Posts we've tried this run that failed download/processing — don't
+            # retry them within this invocation either.
+            failed_ids: set[str] = set()
+            prepared = None
+            post_id = None
+
+            for _ in range(cfg.reddit.max_candidates):
+                try:
+                    post = fetch_top_image(
+                        subreddit=cfg.reddit.subreddit,
+                        max_candidates=cfg.reddit.max_candidates,
+                        user_agent=cfg.reddit.user_agent,
+                        skip_post_ids=recent_ids | failed_ids,
+                    )
+                except RedditError as e:
+                    log.warning("No new image to display, skipping refresh: %s", e)
+                    return 0
+
+                # Clean up any prior attempt's temp file before starting a new one.
+                if tmp_download is not None:
+                    tmp_download.unlink(missing_ok=True)
+                tmp_download = Path(tempfile.gettempdir()) / f"epaper_reddit_{post.id}"
+                try:
+                    download_image(post.url, cfg.reddit.user_agent, str(tmp_download))
+                except Exception as e:  # noqa: BLE001
+                    log.warning("Download failed for post %s (%s); trying next", post.id, e)
+                    failed_ids.add(post.id)
+                    continue
+
+                try:
+                    prepared = prepare_image(
+                        tmp_download,
+                        width=cfg.image.width,
+                        height=cfg.image.height,
+                        fit=cfg.image.fit,
+                        dither=cfg.image.dither,
+                    )
+                except Exception as e:  # noqa: BLE001
+                    log.warning("Image processing failed for post %s (%s); trying next", post.id, e)
+                    failed_ids.add(post.id)
+                    continue
+
+                post_id = post.id
+                break
+
+            if prepared is None:
+                log.warning("Exhausted candidates without a usable image, skipping refresh")
                 return 0
-
-            # Download to a temp file. We don't keep the original around — only the
-            # final BMP. If you want the source, look at post.url in the logs.
-            tmp_download = Path(tempfile.gettempdir()) / f"epaper_reddit_{post.id}"
-            try:
-                download_image(post.url, cfg.reddit.user_agent, str(tmp_download))
-            except Exception as e:  # noqa: BLE001
-                log.error("Download failed: %s", e)
-                return 4
-            local_image = tmp_download
-            post_id = post.id
-
-        # Image processing ------------------------------------------------------
-        try:
-            prepared = prepare_image(
-                local_image,
-                width=cfg.image.width,
-                height=cfg.image.height,
-                fit=cfg.image.fit,
-                dither=cfg.image.dither,
-            )
-        except Exception as e:  # noqa: BLE001
-            log.exception("Image processing failed: %s", e)
-            return 5
 
         bmp_path = cfg.image.output_bmp
         if not cfg.image.keep_bmp:
